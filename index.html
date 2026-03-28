@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SteerBox v1 | Irham Build</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --neon-gold: #ffcc00;
+            --cyber-bg: #0a0a0a;
+            --neon-red: #ff4444;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--cyber-bg);
+            color: white;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            text-align: center;
+            overflow: hidden;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .screen {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        /* --- UI MENU --- */
+        h1 { font-size: 2.5rem; color: var(--neon-gold); text-shadow: 0 0 15px var(--neon-gold); margin-bottom: 30px; }
+        .btn {
+            padding: 18px 40px;
+            margin: 10px;
+            border: 2px solid var(--neon-gold);
+            background: rgba(255, 204, 0, 0.05);
+            color: var(--neon-gold);
+            font-weight: bold;
+            border-radius: 15px;
+            cursor: pointer;
+            width: 85%;
+            max-width: 320px;
+            font-size: 1rem;
+            text-transform: uppercase;
+            transition: 0.3s;
+        }
+        .btn:active { background: var(--neon-gold); color: black; box-shadow: 0 0 30px var(--neon-gold); }
+
+        /* --- UI LAYAR (HOST) --- */
+        #wheel {
+            width: 240px;
+            height: 240px;
+            border: 12px solid var(--neon-gold);
+            border-radius: 50%;
+            position: relative;
+            transition: transform 0.05s linear;
+            box-shadow: 0 0 40px rgba(255, 204, 0, 0.2);
+            margin: 30px 0;
+        }
+        #wheel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 50%;
+            width: 8px; height: 35px;
+            background: var(--neon-red);
+            transform: translateX(-50%);
+            border-radius: 0 0 5px 5px;
+        }
+        .status-badge { padding: 5px 15px; border-radius: 20px; font-size: 0.8rem; background: #222; margin-bottom: 10px; }
+
+        /* --- UI SETIR (CONTROLLER) --- */
+        #angle-display { font-size: 6rem; font-weight: 900; color: var(--neon-gold); margin: 0; }
+        .hint { color: #666; font-size: 0.9rem; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="menu-screen" class="screen">
+        <h1>STEERBOX V1</h1>
+        <button class="btn" onclick="startApp('host')">HP 1: LAYAR GAME</button>
+        <button class="btn" onclick="startApp('controller')">HP 2: SETIR</button>
+        <p class="hint">Project: Irham - Steerbox-v1</p>
+    </div>
+
+    <div id="host-screen" class="screen hidden">
+        <div class="status-badge" id="conn-status">WAITING...</div>
+        <div id="wheel"></div>
+        <h2 id="host-angle">0°</h2>
+        <button class="btn" style="padding:10px; width:100px; font-size:0.7rem;" onclick="location.reload()">RESET</button>
+    </div>
+
+    <div id="controller-screen" class="screen hidden">
+        <div class="status-badge" style="color: var(--neon-gold);">CONTROLLER ACTIVE</div>
+        <h1 id="angle-display">0°</h1>
+        <p>Pegang HP Horizontal (Landscape)</p>
+        <p class="hint">Data dikirim via Realtime Firebase</p>
+        <button class="btn" style="padding:10px; width:100px; font-size:0.7rem;" onclick="location.reload()">BACK</button>
+    </div>
+
+<script>
+    // --- KONFIGURASI FIREBASE (SUDAH DISESUAIKAN DENGAN SS LU) ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDoRRWghIvga-VOoqaTsTr91vUoP47-PxSw",
+        authDomain: "steerbox-irham.firebaseapp.com",
+        databaseURL: "https://steerbox-irham-default-rtdb.firebaseio.com",
+        projectId: "steerbox-irham",
+        storageBucket: "steerbox-irham.firebasestorage.app",
+        messagingSenderId: "403591896090",
+        appId: "1:403591896090:web:79a0fb3f8bcbd02101c5a3"
+    };
+
+    // Inisialisasi Firebase
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const database = firebase.database().ref('steer_v1');
+
+    function startApp(mode) {
+        document.getElementById('menu-screen').classList.add('hidden');
+
+        if (mode === 'host') {
+            document.getElementById('host-screen').classList.remove('hidden');
+            initHost();
+        } else {
+            document.getElementById('controller-screen').classList.remove('hidden');
+            // Izin sensor untuk iOS/Android Modern
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(state => { if (state === 'granted') initController(); })
+                    .catch(console.error);
+            } else {
+                initController();
+            }
+        }
+    }
+
+    // --- LOGIKA HP 1 (PENERIMA) ---
+    function initHost() {
+        database.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                const statusEl = document.getElementById('conn-status');
+                statusEl.innerText = "CONNECTED";
+                statusEl.style.color = "lime";
+                
+                // Update Rotasi Setir
+                document.getElementById('wheel').style.transform = `rotate(${data.angle}deg)`;
+                document.getElementById('host-angle').innerText = data.angle + "°";
+            }
+        });
+    }
+
+    // --- LOGIKA HP 2 (PENGIRIM) ---
+    function initController() {
+        window.addEventListener('deviceorientation', (event) => {
+            // Gamma: Kemiringan kiri-kanan saat HP landscape
+            let rawAngle = Math.round(event.gamma);
+            
+            // Filter nilai biar gak liar (limit 75 derajat)
+            let filteredAngle = rawAngle;
+            if (filteredAngle > 75) filteredAngle = 75;
+            if (filteredAngle < -75) filteredAngle = -75;
+
+            // Update UI Lokal
+            document.getElementById('angle-display').innerText = filteredAngle + "°";
+
+            // Kirim ke Firebase (Realtime)
+            database.set({
+                angle: filteredAngle,
+                lastUpdate: Date.now()
+            });
+        });
+    }
+</script>
+</body>
+</html>

@@ -3,45 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Steerbox v1 | Final Stable</title>
+    <title>Steerbox v1 | Final Verified</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        :root { --gold: #ffcc00; --bg: #0a0a0a; }
+        :root { --gold: #ffcc00; --bg: #0a0a0a; --red: #ff4444; }
         body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; text-align: center; overflow: hidden; user-select: none; }
         .screen { display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; }
-        .btn { padding: 20px; margin: 10px; border: 2px solid var(--gold); background: rgba(255,204,0,0.1); color: var(--gold); font-weight: bold; border-radius: 15px; width: 80%; max-width: 300px; text-transform: uppercase; cursor: pointer; }
+        .btn { padding: 20px; margin: 10px; border: 2px solid var(--gold); background: rgba(255,204,0,0.1); color: var(--gold); font-weight: bold; border-radius: 15px; width: 80%; max-width: 300px; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        .btn:active { background: var(--gold); color: black; }
         #wheel { width: 250px; height: 250px; border: 15px solid var(--gold); border-radius: 50%; position: relative; transition: transform 0.1s ease-out; margin: 20px 0; }
-        #wheel::after { content: ''; position: absolute; top: -10px; left: 50%; width: 14px; height: 40px; background: red; transform: translateX(-50%); border-radius: 5px; }
+        #wheel::after { content: ''; position: absolute; top: -10px; left: 50%; width: 14px; height: 40px; background: var(--red); transform: translateX(-50%); border-radius: 5px; }
         #angle-val { font-size: 5rem; font-weight: 900; color: var(--gold); margin: 0; }
         .hidden { display: none !important; }
+        #status { font-size: 0.8rem; color: gray; margin-bottom: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
 
     <div id="menu" class="screen">
-        <h1 style="color: var(--gold); letter-spacing: 5px;">STEERBOX V1</h1>
+        <h1 style="color: var(--gold); letter-spacing: 5px; margin-bottom: 0;">STEERBOX V1</h1>
+        <p style="color: #555; margin-bottom: 20px;">By Irham Build</p>
         <button class="btn" onclick="pilihMode('host')">HP 1: MONITOR (ROBLOX)</button>
         <button class="btn" onclick="pilihMode('controller')">HP 2: SETIR (GYRO)</button>
     </div>
 
     <div id="view-host" class="screen hidden">
-        <div id="status" style="color: gray;">WAITING...</div>
+        <div id="status">WAITING FOR DATA...</div>
         <div id="wheel"></div>
         <h1 id="out-angle">0°</h1>
+        <button class="btn" style="width: 100px; padding: 10px; font-size: 0.6rem;" onclick="location.reload()">BACK</button>
     </div>
 
     <div id="view-controller" class="screen hidden">
         <h1 id="angle-val">0°</h1>
-        <p style="color:#888;">Posisi: Portrait 0°</p>
-        <button class="btn" style="width: 120px; padding: 10px; font-size: 0.7rem;" onclick="location.reload()">RE-CALIBRATE</button>
+        <p style="color:#888;">Pegang HP Tegak (Portrait)</p>
+        <button class="btn" style="width: 150px; padding: 10px; font-size: 0.7rem;" onclick="location.reload()">RE-CALIBRATE</button>
     </div>
 
 <script>
+    // KONFIGURASI FIREBASE (VERSI SERVER SINGAPORE)
     const firebaseConfig = {
         apiKey: "AIzaSyDoRRWghIvga-VOoqaTsTr91vUoP47-PxSw",
         authDomain: "steerbox-irham.firebaseapp.com",
-        databaseURL: "https://steerbox-irham-default-rtdb.firebaseio.com",
+        databaseURL: "https://steerbox-irham-default-rtdb.asia-southeast1.firebasedatabase.app",
         projectId: "steerbox-irham",
         storageBucket: "steerbox-irham.firebasestorage.app",
         messagingSenderId: "403591896090",
@@ -57,7 +62,7 @@
             document.getElementById('view-host').classList.remove('hidden');
             db.on('value', (snap) => {
                 const data = snap.val();
-                if (data) {
+                if (data && data.angle !== undefined) {
                     document.getElementById('status').innerText = "CONNECTED";
                     document.getElementById('status').style.color = "lime";
                     document.getElementById('wheel').style.transform = `rotate(${data.angle}deg)`;
@@ -66,38 +71,41 @@
             });
         } else {
             document.getElementById('view-controller').classList.remove('hidden');
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(initSensors).catch(() => alert("Izin sensor ditolak!"));
-            } else {
-                initSensors();
-            }
+            startSensor();
+        }
+    }
+
+    function startSensor() {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(initSensors)
+                .catch(() => alert("Akses sensor ditolak! Aktifkan di pengaturan browser."));
+        } else {
+            initSensors();
         }
     }
 
     function initSensors() {
         window.addEventListener('deviceorientation', (e) => {
-            // Kita pakai Gamma (kemiringan kiri-kanan)
-            // Dan Beta (kemiringan depan-belakang)
-            let g = e.gamma; 
-            let b = e.beta;
+            let g = e.gamma; // Sumbu horizontal
+            let b = e.beta;  // Sumbu vertikal
 
-            // Logika Deteksi: Jika HP dalam posisi portrait (beta > 0)
+            // Logika Portrait 0 derajat
             let radian = Math.atan2(g, b);
             let angle = Math.round(radian * (180 / Math.PI));
 
-            // KALIBRASI ARAH (Inverted Fix)
-            // Agar miring kanan = Positif, miring kiri = Negatif
+            // Normalisasi putaran agar stabil di -180 sampai 180
             let finalAngle = angle;
-
-            // Memastikan Portrait Kebalik Prefer -180
             if (finalAngle > 180) finalAngle -= 360;
             if (finalAngle < -180) finalAngle += 360;
 
-            // Deadzone (2 derajat) biar anteng
+            // Deadzone 2 derajat biar gak gemeter pas posisi lurus
             if (Math.abs(finalAngle) < 2) finalAngle = 0;
 
             document.getElementById('angle-val').innerText = finalAngle + "°";
-            db.set({ angle: finalAngle });
+            
+            // Kirim data ke Firebase
+            db.update({ angle: finalAngle }); 
         }, true);
     }
 </script>

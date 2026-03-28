@@ -3,75 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SteeringWHEEL2PLAY | Irham Build</title>
-    
+    <title>SteeringWHEEL2PLAY | 360 Stable</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
     <style>
         :root { --gold: #ffcc00; --bg: #0a0a0a; --red: #ff4444; }
-        body { 
-            margin: 0; background: var(--bg); color: white; 
-            font-family: 'Segoe UI', sans-serif; text-align: center; 
-            overflow: hidden; user-select: none; -webkit-tap-highlight-color: transparent;
-        }
+        body { margin: 0; background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; text-align: center; overflow: hidden; user-select: none; }
         .screen { display: flex; flex-direction: column; height: 100vh; justify-content: center; align-items: center; }
-        
-        /* UI BUTTONS */
-        .btn { 
-            padding: 20px; margin: 10px; border: 2px solid var(--gold); 
-            background: rgba(255, 204, 0, 0.05); color: var(--gold); 
-            font-weight: bold; border-radius: 15px; cursor: pointer; 
-            width: 80%; max-width: 300px; text-transform: uppercase; 
-            transition: 0.2s;
-        }
-        .btn:active { background: var(--gold); color: black; box-shadow: 0 0 20px var(--gold); }
-        
-        /* VISUAL WHEEL */
-        #wheel { 
-            width: 260px; height: 260px; border: 16px solid var(--gold); border-radius: 50%; 
-            position: relative; transition: transform 0.05s linear; 
-            box-shadow: 0 0 40px rgba(255, 204, 0, 0.3);
-            margin: 20px 0;
-        }
-        #wheel::after { 
-            content: ''; position: absolute; top: -10px; left: 50%; 
-            width: 14px; height: 45px; background: var(--red); 
-            transform: translateX(-50%); border-radius: 6px; 
-        }
-        
-        #angle-val { font-size: 5.5rem; font-weight: 900; color: var(--gold); margin: 0; text-shadow: 0 0 10px rgba(255, 204, 0, 0.5); }
+        .btn { padding: 20px; margin: 10px; border: 2px solid var(--gold); background: rgba(255,204,0,0.1); color: var(--gold); font-weight: bold; border-radius: 15px; cursor: pointer; width: 80%; max-width: 300px; text-transform: uppercase; }
+        #wheel { width: 250px; height: 250px; border: 15px solid var(--gold); border-radius: 50%; position: relative; transition: transform 0.1s ease-out; box-shadow: 0 0 30px rgba(255, 204, 0, 0.3); margin: 20px 0; }
+        #wheel::after { content: ''; position: absolute; top: -10px; left: 50%; width: 14px; height: 45px; background: var(--red); transform: translateX(-50%); border-radius: 6px; }
+        #angle-val { font-size: 5rem; font-weight: 900; color: var(--gold); margin: 0; }
         .hidden { display: none !important; }
-        .footer { color: #444; font-size: 0.7rem; margin-top: 15px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
     </style>
 </head>
 <body>
 
     <div id="menu" class="screen">
-        <h1 style="color: var(--gold); letter-spacing: 4px; margin-bottom: 5px;">STEERING WHEEL</h1>
-        <p style="color: #888; margin-bottom: 30px;">2 PLAY v1.0</p>
+        <h1 style="color: var(--gold); letter-spacing: 5px;">STEERBOX V1</h1>
         <button class="btn" onclick="pilihMode('host')">HP 1: LAYAR GAME</button>
         <button class="btn" onclick="pilihMode('controller')">HP 2: SETIR (GYRO)</button>
-        <p class="footer">com.irham.steerbox.v1</p>
     </div>
 
     <div id="view-host" class="screen hidden">
-        <div id="status" style="color: #555; font-weight: bold;">OFFLINE</div>
+        <div style="margin-bottom: 15px;"><span id="dot" class="status-dot" style="background:gray;"></span> <span id="status">WAITING...</span></div>
         <div id="wheel"></div>
         <h1 id="out-angle">0°</h1>
-        <button class="btn" style="width: 100px; padding: 10px; font-size: 0.6rem;" onclick="location.reload()">KEMBALI</button>
     </div>
 
     <div id="view-controller" class="screen hidden">
-        <div style="color: var(--gold); font-weight: bold; letter-spacing: 2px;">CALIBRATED SENSOR</div>
         <h1 id="angle-val">0°</h1>
-        <p style="color: #888;">Pegang HP Posisi Landscape</p>
-        <div class="footer">Data dikirim ke Firebase Realtime</div>
-        <button class="btn" style="width: 100px; padding: 10px; font-size: 0.6rem; margin-top: 20px;" onclick="location.reload()">RESET</button>
+        <p style="color:#666;">Pegang Landscape, lalu miringkan</p>
+        <button class="btn" style="width: 150px; padding: 10px;" onclick="location.reload()">RE-CALIBRATE</button>
     </div>
 
 <script>
-    // KONFIGURASI FIREBASE LU
     const firebaseConfig = {
         apiKey: "AIzaSyDoRRWghIvga-VOoqaTsTr91vUoP47-PxSw",
         authDomain: "steerbox-irham.firebaseapp.com",
@@ -82,31 +50,28 @@
         appId: "1:403591896090:web:79a0fb3f8bcbd02101c5a3"
     };
 
-    // Init Firebase
     if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
     const db = firebase.database().ref('steer_v1');
+
+    let offsetAngle = 0; // Buat kalibrasi otomatis
 
     function pilihMode(m) {
         document.getElementById('menu').classList.add('hidden');
         if (m === 'host') {
             document.getElementById('view-host').classList.remove('hidden');
-            // Dengerin data dari Firebase
             db.on('value', (snap) => {
                 const data = snap.val();
                 if (data) {
-                    document.getElementById('status').innerText = "ONLINE";
-                    document.getElementById('status').style.color = "#00ff00";
+                    document.getElementById('status').innerText = "CONNECTED";
+                    document.getElementById('dot').style.background = "#00ff00";
                     document.getElementById('wheel').style.transform = `rotate(${data.angle}deg)`;
-                    document.getElementById('out-angle').innerText = data.angle + "°";
+                    document.getElementById('out-angle').innerText = Math.round(data.angle) + "°";
                 }
             });
         } else {
             document.getElementById('view-controller').classList.remove('hidden');
-            // Minta izin sensor buat HP modern
             if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(res => { if(res === 'granted') initSensors(); })
-                    .catch(e => alert("Izin Sensor Ditolak"));
+                DeviceOrientationEvent.requestPermission().then(initSensors).catch(() => alert("Izin Sensor Diperlukan!"));
             } else {
                 initSensors();
             }
@@ -115,30 +80,29 @@
 
     function initSensors() {
         window.addEventListener('deviceorientation', (e) => {
-            let x = e.beta;  
-            let y = e.gamma; 
+            // Gunakan Beta (X) dan Gamma (Y)
+            let b = e.beta;  
+            let g = e.gamma; 
 
-            // Rumus Atan2 buat lingkaran 360 derajat
-            let radian = Math.atan2(y, x);
-            let angle = Math.round(radian * (180 / Math.PI));
+            // Rumus Atan2 untuk mendeteksi rotasi HP seperti setir (Landscape)
+            let radian = Math.atan2(b, g);
+            let rawAngle = radian * (180 / Math.PI);
 
-            // Kalibrasi Landscape (0 derajat pas lurus)
-            let finalAngle = angle - 90;
+            // Logika Kalibrasi: Saat pertama buka atau pencet Reset, dia set posisi lurus
+            if (offsetAngle === 0) offsetAngle = rawAngle;
 
-            // Normalisasi range -180 ke 180
+            let finalAngle = rawAngle - offsetAngle;
+
+            // Normalisasi agar putaran mulus di -180 sampai 180
             if (finalAngle < -180) finalAngle += 360;
             if (finalAngle > 180) finalAngle -= 360;
 
-            // Invert arah biar miring kanan = Positif
-            finalAngle = -finalAngle;
+            // Filter Noise: Biar nggak goyang-goyang pas lurus
+            if (Math.abs(finalAngle) < 1) finalAngle = 0;
 
-            // Update UI & Kirim Data
-            document.getElementById('angle-val').innerText = finalAngle + "°";
-            db.set({ 
-                angle: finalAngle,
-                ts: Date.now() 
-            });
-        });
+            document.getElementById('angle-val').innerText = Math.round(finalAngle) + "°";
+            db.set({ angle: Math.round(finalAngle) });
+        }, true);
     }
 </script>
 </body>
